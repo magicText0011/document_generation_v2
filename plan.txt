@@ -1,0 +1,89 @@
+УДАЛЕНИЕ LLM: ИЗВЛЕЧЕНИЕ ТОЛЬКО КОДОМ
+=====================================
+
+Статус: ВЫПОЛНЕНО.
+
+Что сделано
+-----------
+- Из pipeline.py вырезана вся LLM-обвязка: вызов YandexGPT (call_yandexgpt),
+  сборка промпта (build_messages), маскирование ПДн (mask_pii/restore_pii),
+  парсер ответа модели (parse_placeholders), расчёт стоимости (_calc_cost_usd),
+  настройки YC_*/PRICE_*/RUB_TO_USD.
+- Удалён prompt_data.py (system-промпт, FORMULA_BLOCK, TEMPLATES_LIST).
+- Из requirements.txt убран requests (использовался только LLM-вызовом).
+
+Чем заменено
+------------
+Все значения извлекаются детерминированно в pipeline.py. Извлекаются ТОЛЬКО поля,
+которые реально подставляются в итоговые документы (opredelenie.docx / reshenie.docx);
+неиспользуемые (email, ИНН, паспорт, ставка пени, способ погашения, график-строка,
+дата иска и т.п.) намеренно не ищутся.
+- extract_vvod_dannyh()      — поля ручного ввода из vvod_dannyh.txt ("Метка: значение").
+- extract_documents()        — ФИО сторон (для склонений), номер/дата/срок/ставка займа,
+                               первая строка графика платежей (дата/сумма/осн.долг/проценты),
+                               суммы из искового. Якоря — по фиксированным фразам шаблонов.
+- extract_from_certificate() — адреса, LOANDATE_START, LOAN_AMOUNT (без изменений).
+- extract_strict_markers()   — PRETENSION_DATE, PENALTY_TO (без изменений).
+- compute_formulas()         — производные ключи (PRINCIPAL_SUM, TOTAL_SUM, INTEREST_FROM/TO,
+                               PENALTY_FROM, JUDGE_INITIALS, JUDGE_POSITION_WITH_DASH, CITY).
+
+Зафиксированные решения
+-----------------------
+- PAYMENT_DATE/PAYMENT_SUM/PRINCIPAL/INTEREST берутся из ПЕРВОЙ строки «Графика
+  платежей» (как в исходной инструкции). Это исправляет прежнюю несогласованность
+  LLM (он брал числа из таблицы фактических оплат): PAYMENT_SUM 50.00 -> 352.70,
+  PRINCIPAL 65.00 -> 250.00.
+- Поле, не найденное регуляркой, пропускается; прогон не падает (documents.py
+  подставит пробел вместо отсутствующего ключа).
+- Суммы (LOAN_PRINCIPAL/INTEREST_SUM/PENALTY_SUM) берутся из искового (приоритет
+  над претензией).
+
+Проверка
+--------
+Прогон `python3 pipeline.py` на текущем out_txt/ даёт 42 плейсхолдера без сети/ключей.
+Сквозная цепочка pipeline -> morph_fio -> documents: оба итоговых docx заполняются
+полностью, незаменённых плейсхолдеров нет, неиспользуемых ключей не извлекается.
+
+Безопасность
+------------
+В прежней версии pipeline.py был захардкожен реальный API-ключ YandexGPT. Он удалён,
+но считается скомпрометированным — отозвать в Yandex Cloud.
+
+
+
+
+Все команды выполняются из каталога проекта (compose.yaml берётся автоматически, без -f).
+
+  Команды управления
+
+  Запуск / сборка
+  docker compose up -d --build    # пересобрать образ и поднять (или: make build / make upd)
+  docker compose up -d            # поднять без пересборки
+  docker compose build            # только собрать образ, не запускать
+
+  Остановка / удаление
+  docker compose stop             # остановить (контейнер сохраняется)
+  docker compose start            # запустить остановленный
+  docker compose restart          # перезапустить
+  docker compose down             # остановить и удалить контейнер + сеть
+
+  Статус и логи
+  docker compose ps               # статус контейнера и порты
+  docker compose logs -f          # логи в реальном времени (Ctrl+C — выход)
+  docker compose logs --tail 50   # последние 50 строк
+
+  Внутрь контейнера / разовые команды
+  docker compose exec kapusta bash             # шелл внутри контейнера
+  docker compose exec kapusta python3 pipeline.py   # запустить конвейер вручную
+
+  Конфиг и проверка
+  docker compose config           # показать итоговый собранный конфиг (валидация)
+
+  Dev-стек (то же приложение на порту 8899, отдельный файл):
+  docker compose -f docker-compose-dev.yml up -d      # = make upd-dev
+  docker compose -f docker-compose-dev.yml down
+
+  Очистка системы (осторожно — трогает весь Docker, не только проект):
+  make prune                      # docker system prune --all --volumes
+
+  http://localhost:8089

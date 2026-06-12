@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>Формирование и загрузка документов</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 10px; }
+    h2, h3 { margin-top: 20px; }
+    .card { border: 1px solid #ccc; padding: 14px; border-radius: 6px; margin-bottom: 16px; background: #fafafa; }
+    label { display: block; margin: 6px 0 4px; font-weight: 600; }
+    .field { margin-bottom: 10px; }
+    input[type="text"], input[type="email"], input[type="date"], input[type="time"], input[type="number"], textarea {
+      width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
+    }
+    input[type="file"] { margin-top: 4px; }
+    button { margin-top: 10px; padding: 8px 14px; border: none; border-radius: 4px; background: #0078D4; color: white; cursor: pointer; }
+    button:hover { background: #005a9e; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    progress { width: 100%; height: 20px; }
+
+    /* Внутренний суффикс в поле суммы */
+    .with-suffix { position: relative; }
+    .with-suffix input[type="number"] { padding-right: 200px; }
+    .with-suffix .suffix {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      color: #555; pointer-events: none; font-weight: 500; white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Формирование и загрузка документов</h2>
+
+  <!-- 🔥 Блок для формирования файла "ввод_данных" -->
+  <h3>1. Заполните данные для файла "ввод_данных.txt"</h3>
+  <form id="inputForm" class="card">
+    <div class="field">
+      <label>Город:</label>
+      <input type="text" name="CITY" placeholder="например: Минск" title="Укажите город полностью, например: Минск" />
+    </div>
+
+    <div class="field">
+      <label>Номер дела:</label>
+      <input type="text" name="CASE_NO" placeholder="например: № 123-45/2024" title="Номер дела в вашем формате: № 123-45/2024" />
+    </div>
+
+    <div class="field">
+      <label>Дата вынесения определения:</label>
+      <input type="date" name="ORDER_DATE" title="Выберите дату в календаре (формат YYYY-MM-DD)" />
+    </div>
+<!-- УДАЛИТЬ, если поле не нужно
+    <div class="field">
+      <label>Название третейского суда:</label>
+      <input type="text" name="COURT_NAME" placeholder="например: Третейский суд при ... " title="Полное официальное наименование суда" />
+    </div>
+-->
+    <div class="field">
+      <label>ФИО судьи:</label>
+      <input type="text" name="JUDGE_FULL" placeholder="например: Иванов Иван Иванович" title="Фамилия, имя и отчество полностью" />
+    </div>
+
+    <div class="field">
+      <label>Адрес третейского суда:</label>
+      <input type="text" name="VENUE_ADDRESS" placeholder="например: 220030, г. Минск, ул. Ленина, 10" title="Почтовый адрес суда (индекс, город, улица, дом)" />
+    </div>
+
+    <div class="field">
+      <label>Дата заседания:</label>
+      <input type="date" name="HEARING_DATE" title="Выберите дату заседания (формат YYYY-MM-DD)" />
+    </div>
+
+    <div class="field">
+      <label>Время заседания:</label>
+      <!-- Заменили native time на текст с маской HH:MM, чтобы не было синего блока -->
+      <input type="text" name="HEARING_TIME" id="HEARING_TIME"
+             inputmode="numeric" maxlength="5"
+             placeholder="например: 10:30"
+             pattern="^([01]\d|2[0-3]):([0-5]\d)$"
+             title="Только часы и минуты (ЧЧ:ММ), без секунд" />
+      <div style="font-size:12px;color:#666;margin-top:4px;">
+        Формат: ЧЧ:ММ (24‑часовой, например 09:05, 18:30). Секунд нет.
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Крайний срок подачи документов:</label>
+      <input type="date" name="DOCS_DUE_DATE" title="Выберите крайний срок (формат YYYY-MM-DD)" />
+    </div>
+
+    <div class="field">
+      <label>Электронная почта суда:</label>
+      <input type="email" name="COURT_EMAIL" placeholder="например: court@example.by" title="Рабочий e-mail суда, например court@example.by" />
+    </div>
+
+    <div class="field">
+      <label>Дата вынесения решения:</label>
+      <input type="date" name="DECISION_DATE" title="Выберите дату решения (формат YYYY-MM-DD)" />
+    </div>
+
+    <div class="field">
+      <label>Сумма арбитражного сбора:</label>
+      <div class="with-suffix">
+        <input type="number" name="ARBITRATION_FEE" min="0" step="0.01"
+               placeholder="например: 150.00"
+               title="Только число; копейки через точку: 150.00" />
+        <span class="suffix">белорусских рублей</span>
+      </div>
+    </div>
+
+    <div class="row">
+      <button type="button" id="createInputFile">Сформировать файл ввод_данных.txt</button>
+      <a id="downloadInputFile" style="display:none;" href="#" download>Скачать ввод_данных.txt</a>
+    </div>
+  </form>
+
+  <!-- 📂 Блок загрузки остальных файлов -->
+  <h3>2. Загрузка всех документов в n8n</h3>
+  <form id="uploadForm" class="card">
+    <label>Договор займа: <input type="file" name="file1" /></label>
+    <label>Исковое заявление: <input type="file" name="file2" /></label>
+    <label>Претензия: <input type="file" name="file3" /></label>
+    <label>Свидетельство СОЗ: <input type="file" name="file4" /></label>
+    <label>Чек: <input type="file" name="file5" /></label>
+    <label>Ввод данных (сформированный): <input type="file" id="file6" name="file6" /></label>
+
+    <progress id="progressBar" value="0" max="100"></progress>
+    <button type="submit">Загрузить в n8n</button>
+  </form>
+
+  <!-- 📥 Кнопка скачивания итоговых документов -->
+  <h3>3. Итоговые документы</h3>
+  <div class="card">
+    <button id="downloadResultBtn" disabled>Скачать итоговые документы</button>
+  </div>
+
+<script>
+  const createInputFileBtn = document.getElementById('createInputFile');
+  const downloadInputFile = document.getElementById('downloadInputFile');
+  const file6 = document.getElementById('file6');
+  const inputForm = document.getElementById('inputForm');
+  const progressBar = document.getElementById('progressBar');
+  const downloadResultBtn = document.getElementById('downloadResultBtn');
+  const uploadForm = document.getElementById('uploadForm');
+  const timeInput = document.getElementById('HEARING_TIME');
+
+  let lastBlob = null;
+
+  // Маска времени HH:MM (без секунд). Только цифры и двоеточие в позиции 3.
+  function maskTime(el) {
+    let v = el.value.replace(/\D/g, '').slice(0, 4);
+    if (v.length >= 3) v = v.slice(0,2) + ':' + v.slice(2);
+    el.value = v;
+  }
+  timeInput.addEventListener('input', () => maskTime(timeInput));
+  timeInput.addEventListener('blur', () => {
+    // Автодополнение нулём слева, если введено 1‑2 цифры часов/минут
+    const m = timeInput.value.match(/^([0-2]?\d)(?::([0-5]?\d))?$/);
+    if (m) {
+      let h = m[1].padStart(2, '0');
+      let mm = (m[2] || '').padStart(2, '0');
+      if (mm === '00' && !m[2]) { /* оставляем если не вводили минуты */ }
+      timeInput.value = h + ':' + (m[2] ? mm : '00');
+    }
+  });
+
+  createInputFileBtn.addEventListener('click', () => {
+    const formData = new FormData(inputForm);
+    let content = '';
+
+    for (const [key, valueRaw] of formData.entries()) {
+      let value = valueRaw;
+      if (key === 'HEARING_TIME') {
+        // Строго HH:MM
+        const m = String(valueRaw).match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+        value = m ? valueRaw : '';
+      }
+      content += `{{${key}}}: ${value}\n`;
+    }
+
+    if (!content.trim()) content = 'Файл пуст';
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const fileUrl = URL.createObjectURL(blob);
+
+    downloadInputFile.href = fileUrl;
+    downloadInputFile.download = 'ввод_данных.txt';
+    downloadInputFile.style.display = 'inline-block';
+
+    const dt = new DataTransfer();
+    dt.items.add(new File([blob], 'ввод_данных.txt', { type: 'text/plain' }));
+    file6.files = dt.files;
+  });
+
+  uploadForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    progressBar.value = 0;
+
+    const fd = new FormData(uploadForm);
+    const url = "http://localhost:56782/webhook/court/generate/6";
+
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url, true);
+      xhr.responseType = "blob";
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          progressBar.value = (e.loaded / e.total) * 100;
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          lastBlob = xhr.response;
+          downloadResultBtn.disabled = false;
+          alert("Документы обработаны, можно скачать архив.");
+        } else {
+          alert("Ошибка: " + xhr.status);
+        }
+      };
+
+      xhr.send(fd);
+    } catch (err) {
+      alert("Ошибка сети: " + err.message);
+    }
+  });
+
+  downloadResultBtn.addEventListener('click', () => {
+    if (!lastBlob) return;
+    const url = URL.createObjectURL(lastBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "court_docs.zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+</script>
+
+</body>
+</html>

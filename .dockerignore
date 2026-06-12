@@ -1,0 +1,30 @@
+# Виртуальное окружение хоста (бинарники несовместимы с контейнером)
+.venv/
+venv/
+
+# VCS / IDE
+.git/
+.gitignore
+.idea/
+
+# Кэши Python
+__pycache__/
+*.py[cod]
+
+# Рабочие/генерируемые папки приложения (создаются в рантайме)
+out_txt/
+out_docs/
+documents_converted/
+
+# Логи и диагностические снимки конвейера
+runs.jsonl
+last_input.txt
+last_answer.txt
+*.bak
+
+# Dev-артефакты, в рантайме не нужны
+_cmp/
+example/
+n8n.json
+
+# NB: documents/ (docx-шаблоны), templates/ (UI), sources/ — НУЖНЫ, не исключать.

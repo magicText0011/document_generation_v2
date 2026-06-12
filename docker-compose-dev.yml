@@ -1,0 +1,15 @@
+services:
+  kapusta:
+    build: .
+    container_name: kapusta-pyservice
+    restart: unless-stopped
+    volumes:
+      - ./.env:/usr/src/app/.env
+      - ./:/usr/src/app        # для разработки: монтирует код внутрь контейнера
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_URL=${APP_URL}
+    ports:
+      - "8899:8000"
+    working_dir: /usr/src/app
+    command: ${COMMAND:-python3 ./app.py}  # можно переопределить через переменную окружения

@@ -1,0 +1,385 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aa491861-d635-476e-be0c-4bf9f15355c1",
+              "name": "formula_block",
+              "value": "={{PRINCIPAL_SUM}}:={{LOAN_PRINCIPAL}}\n\n{{TOTAL_SUM}}:={{PRINCIPAL_SUM}} + {{INTEREST_SUM}} + {{PENALTY_SUM}}\n\n{{JUDGE_INITIALS}}:=initials({{JUDGE_FULL}})",
+              "type": "string"
+            },
+            {
+              "id": "5bfd07e2-2854-45b4-b731-b8f4d0347c9d",
+              "name": "templates_list",
+              "value": "={{LOAN_NUMBER}}\n{{LOAN_DATE}}\n{{LOAN_DATE_END}}\n{{LENDER_LAST_NAME}}\n{{LENDER_FIRST_NAME}}\n{{LENDER_MIDDLE_NAME}}\n{{BORROWER_LAST_NAME}}\n{{BORROWER_FIRST_NAME}}\n{{BORROWER_MIDDLE_NAME}}\n{{BORROWER_ID_NUMBER}}\n{{BORROWER_DOCUMENT_TYPE}}\n{{BORROWER_DOCUMENT_SERIES_NUMBER}}\n{{BORROWER_DOCUMENT_ISSUE_DATE}}\n{{BORROWER_DOCUMENT_ISSUER}}\n{{LENDER_EMAIL}}\n{{BORROWER_EMAIL}}\n{{LOAN_AMOUNT}}\n{{LOAN_TERM_DAYS}}\n{{LOAN_ISSUE_DATE}}\n{{LOAN_INTEREST_RATE}}\n{{LOAN_MATURITY_DATE}}\n{{LOAN_REPAYMENT_METHOD}}\n{{LOAN_PRINCIPAL}}\n{{PAYMENT_NUMBER}}\n\n{{PAYMENT_AMOUNT}}\n{{PAYMENT_PRINCIPAL}}\n{{PAYMENT_INTEREST}}\n{{CERTIFICATE_DATE}}\n\n{{CLAIM_AMOUNT}}\n{{CLAIM_PRINCIPAL}}\n{{CLAIM_INTEREST}}\n{{CLAIM_PENALTY}}\n{{CLAIM_DATE}}\n{{CLAIM_TIME}}\n{{CLAIMANT_LAST_NAME}}\n{{CLAIMANT_FIRST_NAME}}\n{{CLAIMANT_MIDDLE_NAME}}\n{{DEFENDANT_LAST_NAME}}\n{{DEFENDANT_FIRST_NAME}}\n{{DEFENDANT_MIDDLE_NAME}}\n{{CLAIMANT_EMAIL}}\n{{DEFENDANT_EMAIL}}\n{{CLAIMANT_ID_NUMBER}}\n{{CLAIMANT_DOCUMENT_TYPE}}\n{{CLAIMANT_DOCUMENT_SERIES_NUMBER}}\n{{CLAIMANT_DOCUMENT_ISSUE_DATE}}\n{{CLAIMANT_DOCUMENT_ISSUER}}\n{{CLAIMANT_ADDRESS}}\n{{DEFENDANT_ADDRESS}}\n{{ARBITRATION_COURT_NAME}}\n{{ARBITRATION_COURT_UNP}}\n{{ARBITRATION_COURT_ADDRESS}}\n{{ARBITRATION_COURT_EMAIL}}\n{{CLAIMANT_SIGNATURE_DATE}}\n{{CLAIMANT_SIGNATURE_TIME}}\n{{CLAIMANT_SIGNATURE}}\n{{CLAIMANT_SIGNATURE_SHORT}}\n{{CLAIMANT_PAYMENT_AMOUNT}}\n{{CLAIMANT_PAYMENT_DATE}}\n{{CLAIMANT_PAYMENT_COMMISSION}}\n{{CLAIMANT_PAYMENT_RRN}}\n{{CLAIMANT_PAYMENT_AUTH_CODE}}\n{{SCREENSHOTS_DATE}}\n{{INTEREST_FROM}}\n{{INTEREST_TO}}\n{{PENALTY_FROM}}\n{{PENALTY_TO}}\n{{PAYMENT_DATE}}\n{{PAYMENT_SUM}}\n{{PRINCIPAL}}\n{{INTEREST}}\n \n\n# формульные ключи (добавлены, чтобы прошёл гард)\n\n{{PRINCIPAL_SUM}}\n{{INTEREST_FROM}}\n{{INTEREST_TO}}\n{{TOTAL_SUM}}\n{{PENALTY_FROM}}\n{{PENALTY_TO}}\n{{JUDGE_INITIALS}}\n",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2000,
+        1728
+      ],
+      "id": "534b4d39-4dd1-45f9-8f50-356d01e2c958",
+      "name": "Template and Formula"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# DOCX/TXT -> Text для ноды n8n \"Code in Python (Beta)\"\n# Вход: items с binary.fileX (base64) и meta (fileName, mimeType)\n# Выход: массив items с json.fileName и json.data (плоский текст)\n\nimport base64, io, zipfile, re\nimport xml.etree.ElementTree as ET\n\nW_NS = {\"w\": \"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"}\n\ndef b64_to_bytes(binfo: dict) -> bytes:\n    return base64.b64decode(binfo.get(\"data\", \"\"))\n\ndef decode_txt(raw: bytes) -> str:\n    for enc in (\"utf-8\", \"cp1251\", \"windows-1251\", \"latin-1\"):\n        try:\n            return raw.decode(enc)\n        except UnicodeDecodeError:\n            continue\n    return raw.decode(\"utf-8\", errors=\"replace\")\n\ndef docx_to_text(raw: bytes) -> str:\n    # Чтение основного документа + минимальная обработка переносов, табов\n    with zipfile.ZipFile(io.BytesIO(raw)) as z:\n        xml = z.read(\"word/document.xml\")\n    root = ET.fromstring(xml)\n\n    lines = []\n    for p in root.findall(\".//w:p\", W_NS):\n        parts = []\n        # обрабатываем w:r/w:t и принудительные переносы w:br, табы w:tab\n        for el in p.iter():\n            tag = el.tag.split(\"}\")[-1]\n            if tag == \"t\":\n                parts.append(el.text or \"\")\n            elif tag == \"tab\":\n                parts.append(\"\\t\")\n            elif tag == \"br\":\n                parts.append(\"\\n\")\n        # убираем лишние пробелы внутри абзаца\n        line = re.sub(r\"[ \\t]+\\n\", \"\\n\", \"\".join(parts)).strip()\n        lines.append(line)\n    text = \"\\n\".join(lines)\n    # нормализация пустых строк\n    text = re.sub(r\"\\n{3,}\", \"\\n\\n\", text)\n    return text.strip()\n\ndef extract_text_from_binary(binfo: dict, name: str) -> str:\n    raw = b64_to_bytes(binfo)\n    lower = (name or \"\").lower()\n    if lower.endswith(\".docx\"):\n        return docx_to_text(raw)\n    elif lower.endswith(\".txt\"):\n        return decode_txt(raw)\n    # попытка авто-детекта для неизвестных расширений\n    try:\n        return docx_to_text(raw)\n    except Exception:\n        return decode_txt(raw)\n\nout_items = []\n\n# !!! Главное: обращаться к item[\"binary\"], а не item.binary\nfor item in items:\n    bin_map = item.get(\"binary\") or {}\n    for key, binfo in bin_map.items():\n        fname = binfo.get(\"fileName\") or f\"{key}.bin.txt\"\n        text = extract_text_from_binary(binfo, fname)\n        out_items.append({\"json\": {\"fileName\": fname + \".txt\" if not fname.endswith(\".txt\") else fname,\n                                   \"data\": text}})\n\n# Если нужно, чтобы downstream-ноды видели исходные items вместе с новыми — раскомментируй:\n# if not out_items:\n#     out_items = [{\"json\": {\"fileName\": \"empty.txt\", \"data\": \"\"}}]\n\nreturn out_items\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2576,
+        1728
+      ],
+      "id": "8191fd55-2e3c-4c14-add2-19f5fa3074c0",
+      "name": "Code in Python (Beta)"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Склеиваем тексты из предыдущей ноды в одно поле\n# Ожидаем, что каждая запись имеет json.fileName и json.data\n\nparts = []\nfor item in items:  # НЕ _input.all(), а именно items\n    j = item.get(\"json\", {}) or {}\n    name = j.get(\"fileName\") or \"input.txt\"\n    body = j.get(\"data\") or j.get(\"text\") or \"\"\n    parts.append(f\"==== {name} ====\\n{body}\".strip())\n\ncombined = \"\\n\\n\".join(parts).strip()\n\nreturn [{\"json\": {\"combined\": combined}}]\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2368,
+        1728
+      ],
+      "id": "8f0ecb9f-3aa2-4ffc-b692-b1424e8d1759",
+      "name": "Code in Python (Beta)1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -688,
+        1712
+      ],
+      "id": "a3f35c5e-9499-434e-bab1-00a36ac9c9b0",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// беру текст из $json.text или $json.templates.text\n// const s = ($json.text ?? $json.templates?.text ?? '').toString();\n\n// беру текст ответа от GPT из наиболее вероятных полей\nconst s = (\n  $json.text ??\n  $json.output ??\n  $json.result ??\n  $json.data ??\n  ''\n).toString();\n\n// строки формата: {{key}}: value\nconst reKV = /^\\s*\\{\\{\\s*([A-Za-z0-9_]+)\\s*\\}\\}:\\s*(=?.+?)\\s*$/;\n\n// --- НОРМАЛИЗАТОРЫ РЕГИСТРА ---\n\nconst ABBRS = new Set([\n  'BYN','ООО','ОАО','ЗАО','ИП','УНП','UNP','ID',\n  'РУВД','РОВД','ОВД','МР' // серия паспорта/аббревиатуры\n]);\n\n// слова/предлоги, которые обычно пишем со строчной (в адресах/общем тексте)\nconst LOWER_WORDS = new Set([\n  'и','в','во','на','но','за','по','из','к','ко','от','о','об','обо','при',\n  'для','с','со','у','над','под','между','или','а','не'\n]);\n\n\n\nfunction smartCapWord(w, keepUpper=false) {\n  if (!w) return w;\n\n  // сохраняем верхний регистр ТОЛЬКО для явных аббревиатур из белого списка\n  if (keepUpper || ABBRS.has(w)) return w;\n\n  // числа/даты — не трогаем\n  if (/^\\d/.test(w)) return w;\n\n  // инициалы: И. / И.О. -> капсом\n  if (/^[A-Za-zА-Яа-яЁё]\\.$/.test(w) || /^[A-Za-zА-Яа-яЁё]\\.[A-Za-zА-Яа-яЁё]\\.$/.test(w)) {\n    return w.toUpperCase();\n  }\n\n  // дефисные слова — капитализируем каждую часть\n  if (w.includes('-')) {\n    return w.split('-').map(part => smartCapWord(part)).join('-');\n  }\n\n  // обычное слово: ПерваяБольшая ОстальныеМаленькие\n  return w.slice(0,1).toUpperCase() + w.slice(1).toLowerCase();\n}\n\n\n// ФИО: каждую часть с заглавной, аббревиатуры сохраняем\nfunction normalizeName(s) {\n  return String(s)\n    .split(/\\s+/)\n    .map(tok => smartCapWord(tok))\n    .join(' ')\n    .replace(/\\s+/g,' ')\n    .trim();\n}\n\n\n\nfunction normalizeAddress(s) {\n  let t = String(s).trim();\n\n  // унифицируем типовые обозначения в нижний регистр для служебных слов\n  t = t\n    .replace(/\\bРЕСПУБЛИКА\\s+БЕЛАРУСЬ\\b/gi, 'Республика Беларусь') // собственные названия — с заглавной\n    .replace(/\\b(ГОРОД)\\b/gi, 'город')\n    .replace(/\\b(ОБЛАСТЬ)\\b/gi, 'область')\n    .replace(/\\b(РАЙОН|Р-Н)\\b/gi, 'район')\n    .replace(/\\b(УЛИЦА)\\b/gi, 'улица')\n    .replace(/\\b(ПРОСПЕКТ|ПР-Т)\\b/gi, 'проспект')\n    .replace(/\\b(ПЕРЕУЛОК|ПЕР\\.)\\b/gi, 'переулок')\n    .replace(/\\b(Г\\.)\\b/gi, 'г.')\n    .replace(/\\b(ОБЛ\\.)\\b/gi, 'обл.')\n    .replace(/\\b(УЛ\\.)\\b/gi, 'ул.')\n    .replace(/\\b(ДОМ|Д\\.)\\b/gi, 'д.')\n    .replace(/\\b(КВАРТИРА|КВ\\.)\\b/gi, 'кв.');\n\n  // токенизация + форматирование\n  const tokens = t.split(/\\s+/).map(tok => {\n    // служебные маркеры — строго в нижнем регистре\n    const m = tok.match(/^(город|область|район|р-н|улица|проспект|переулок|пер\\.|г\\.|обл\\.|ул\\.|д\\.|кв\\.)([,:;.]*)$/i);\n    if (m) return m[1].toLowerCase() + m[2];\n    // аббревиатуры (ООО, РУВД, BYN и т.п.) — оставляем капсом\n    if (ABBRS.has(tok) || (/^[A-ZА-ЯЁ]{2,4}$/.test(tok) && !/\\d/.test(tok))) {\n      return tok.toUpperCase();\n    }\n    // числа/даты — как есть\n    if (/^\\d/.test(tok)) return tok;\n\n    // мягкий тайтл-кейс для остальных слов (включая дефисные)\n    return smartCapWord(tok);\n  });\n\n  // после служебных маркеров — следующему слову даём Заглавную (если это слово)\n  const leadMarkers = /^(город|г\\.|область|обл\\.|район|р-н|улица|ул\\.|проспект|переулок|пер\\.)$/i;\n  for (let i = 0; i < tokens.length - 1; i++) {\n    if (leadMarkers.test(tokens[i]) && /^[A-Za-zА-Яа-яЁё-]+$/.test(tokens[i+1])) {\n      tokens[i+1] = smartCapWord(tokens[i+1]);\n    }\n  }\n\n  return tokens.join(' ').replace(/\\s+/g, ' ').trim();\n}\n\n\n// Паспорт: «паспорт МР 000008 06.06.2000 Ленинским РОВД г. Минска»\nfunction normalizePassport(s) {\n  let t = String(s).trim();\n  // МР/РУВД/РОВД/ОВД оставляем капсом\n  t = t\n    .replace(/\\b(паспорт)\\b/gi, 'паспорт')\n    .replace(/\\b(мр)\\b/gi, 'МР')\n    .replace(/\\b(рувд)\\b/gi, 'РУВД')\n    .replace(/\\b(ровд)\\b/gi, 'РОВД')\n    .replace(/\\b(овд)\\b/gi, 'ОВД')\n    .replace(/\\b(г\\.)\\b/gi, 'г.');\n\n  // Остальное — мягкий тайтл-кейс\n  t = t.split(/\\s+/).map(tok => {\n    if (ABBRS.has(tok) || /^[A-ZА-ЯЁ]{2,4}$/.test(tok)) return tok;\n    if (/^\\d+(\\.\\d+)*$/.test(tok)) return tok; // числа/даты\n    if (tok.toLowerCase() === 'г.') return 'г.';\n    return smartCapWord(tok);\n  }).join(' ');\n\n  return t.replace(/\\s+/g,' ').trim();\n}\n\n// --- Основная логика разбора и нормализации ---\n\nconst NAME_KEYS = new Set(['PLAINTIFF_FULL','DEFENDANT_FULL']);\nconst ADDRESS_KEYS = new Set(['PLAINTIFF_ADDRESS','DEFENDANT_ADDRESS']);\nconst PASSPORT_KEYS = new Set(['DEFENDANT_PASSPORT','CLAIMANT_PASSPORT']);\n\nconst fields = {};\n\nfor (const line of s.replace(/\\r\\n/g, '\\n').split('\\n')) {\n  const m = line.match(reKV);\n  if (!m) continue;\n\n  // ключ в ВЕРХНЕМ РЕГИСТРЕ (ключи нормализуем)\n  const rawKey = m[1].trim();\n  const keyUpper = rawKey.toUpperCase();\n  const key = `{{${keyUpper}}}`;\n\n  let val = m[2].trim();\n\n  // --- Нормализация ЗНАЧЕНИЙ точечно по плейсхолдерам ---\n  if (NAME_KEYS.has(keyUpper)) {\n    val = normalizeName(val);\n  } else if (ADDRESS_KEYS.has(keyUpper)) {\n    val = normalizeAddress(val);\n  } else if (PASSPORT_KEYS.has(keyUpper)) {\n    val = normalizePassport(val);\n  }\n  // всё остальное (суммы, даты, e-mail и пр.) не трогаем\n\n  fields[key] = val;\n}\n\n// опционально прокидываем шаблоны дальше по пайплайну\nconst out = { ...fields };\nif ($json.template_opredelenie != null) out.template_opredelenie = $json.template_opredelenie;\nif ($json.template_reshenie   != null) out.template_reshenie   = $json.template_reshenie;\n\nreturn [{ json: out }];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1248,
+        1728
+      ],
+      "id": "c57a0f9a-a281-46a4-a4ae-85670746ad3f",
+      "name": "placeholders from documents1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "court/generate/6",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true
+        }
+      },
+      "id": "2421ee00-736e-4a69-b9df-8fb61d86e1cf",
+      "name": "Webhook In (6)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -2768,
+        1728
+      ],
+      "webhookId": "court-two-step-6"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -288,
+        1728
+      ],
+      "id": "ba049d26-8c14-4f56-8af4-8d0ec77000ba",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Режим: Run Once for All Items\n\nresult = {}\n\nfor item in items:\n    # item[\"json\"] – это словарь с твоими плейсхолдерами\n    for k, v in item[\"json\"].items():\n        result[k] = v\n\n# Отдаём один item с объектом ключ-значение\nreturn [\n    {\n        \"json\": result\n    }\n]\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        1728
+      ],
+      "id": "06441645-c429-4f94-85ed-d036a4ed3aaa",
+      "name": "Code in Python (Beta)2"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import math\nfrom datetime import datetime, timedelta\n\n# ---- helpers ----\n\ndef brace(k):\n    \"\"\"\n    Оборачивает ключ в {{...}} и чистит пробелы / лишние скобки.\n    \"\"\"\n    if not k:\n        return k\n    kk = str(k).strip()\n    if kk.startswith(\"{{\"):\n        kk = kk.lstrip(\"{\").lstrip(\"{\").strip()\n    if kk.endswith(\"}}\"):\n        kk = kk.rstrip(\"}\").rstrip(\"}\").strip()\n    return \"{{\" + kk + \"}}\"\n\n\ndef get_s(map_, key):\n    \"\"\"\n    Берёт строковое значение из map_:\n    - сначала по ключу с {{...}}\n    - потом по «сырому» ключу\n    \"\"\"\n    b = brace(key)\n    if b in map_:\n        return str(map_[b]).strip()\n    if key in map_:\n        return str(map_[key]).strip()\n    return \"\"\n\n\ndef parse_byn(s):\n    \"\"\"\n    '1 234,56 BYN' -> 1234.56 (float), иначе NaN.\n    \"\"\"\n    if not s:\n        return math.nan\n    clean = \"\".join(ch for ch in str(s) if ch.isdigit() or ch in \",.-\")\n    clean = clean.replace(\",\", \".\")\n    try:\n        return float(clean)\n    except ValueError:\n        return math.nan\n\n\ndef format_byn(n):\n    \"\"\"\n    float -> 'X.XX BYN' (NaN -> 0.00 BYN).\n    \"\"\"\n    try:\n        v = float(n)\n    except (TypeError, ValueError):\n        v = 0.0\n    if not math.isfinite(v):\n        v = 0.0\n    return f\"{v:.2f} BYN\"\n\n\ndef parse_date_dmy(s):\n    \"\"\"\n    'ДД.ММ.ГГГГ' -> datetime или None.\n    \"\"\"\n    if not s:\n        return None\n    text = str(s).strip()\n    try:\n        return datetime.strptime(text, \"%d.%m.%Y\")\n    except ValueError:\n        return None\n\n\ndef to_dmy(d):\n    \"\"\"\n    datetime -> 'ДД.ММ.ГГГГ'.\n    \"\"\"\n    return d.strftime(\"%d.%m.%Y\")\n\n\ndef date_add_days_dmy(dmy, days):\n    \"\"\"\n    Дата 'ДД.ММ.ГГГГ' + days суток -> 'ДД.ММ.ГГГГ'.\n    Если дата криво распарсилась, вернуть исходное или '___'.\n    \"\"\"\n    d = parse_date_dmy(dmy)\n    if not d:\n        return dmy or \"___\"\n    d = d + timedelta(days=days)\n    return to_dmy(d)\n\n\ndef initials(full):\n    \"\"\"\n    'Фамилия Имя Отчество' -> 'И.О. Фамилия'\n    \"\"\"\n    if not full:\n        return \"___\"\n    parts = str(full).strip().split()\n    if len(parts) < 2:\n        return full\n    last = parts[0]\n    first = parts[1] if len(parts) >= 2 else \"\"\n    middle = parts[2] if len(parts) >= 3 else \"\"\n    i1 = (first[0].upper() + \".\") if first else \"\"\n    i2 = (middle[0].upper() + \".\") if middle else \"\"\n    return (i1 + i2 + \" \" + last).strip()\n\n\n# ---- основная логика для всех items ----\n\nnew_items = []\n\nfor item in items:\n    data = item.get(\"json\", {}) or {}\n\n    # соберём in_map с ключами в виде {{KEY}}\n    in_map = {}\n    for k, v in data.items():\n        if isinstance(k, str):\n            in_map[brace(k)] = v\n\n    # входные строки\n    loan_principal_s = get_s(in_map, \"LOAN_PRINCIPAL\")\n    interest_sum_s   = get_s(in_map, \"INTEREST_SUM\")\n    penalty_sum_s    = get_s(in_map, \"PENALTY_SUM\")\n\n    # ОБРАТИ ВНИМАНИЕ: имена как в плейсхолдерах {{LOANDATE_START}} / {{LOANDATE_END}}\n    loandate_start   = get_s(in_map, \"LOANDATE_START\")\n    loandate_end     = get_s(in_map, \"LOANDATE_END\")\n\n    claim_date       = get_s(in_map, \"CLAIM_DATE\")\n    judge_full       = get_s(in_map, \"JUDGE_FULL\")\n\n    # числа\n    loan_principal_n = parse_byn(loan_principal_s)\n    interest_sum_n   = parse_byn(interest_sum_s)\n    penalty_sum_n    = parse_byn(penalty_sum_s)\n\n    out = {}\n\n    # {{PRINCIPAL_SUM}}\n    if math.isfinite(loan_principal_n):\n        out[\"{{PRINCIPAL_SUM}}\"] = format_byn(loan_principal_n)\n    else:\n        out[\"{{PRINCIPAL_SUM}}\"] = loan_principal_s or \"___\"\n\n    # # {{INTEREST_FROM}} / {{INTEREST_TO}}\n    # d_interest_from = parse_date_dmy(loandate_start)\n    # out[\"{{INTEREST_FROM}}\"] = to_dmy(d_interest_from) if d_interest_from else \"___\"\n    # {{INTEREST_FROM}} / {{INTEREST_TO}}\n    d_interest_from = parse_date_dmy(loandate_start)\n    out[\"{{INTEREST_FROM}}\"] = to_dmy(d_interest_from) if d_interest_from else \"___\"\n\n    d_interest_to = parse_date_dmy(loandate_end)\n    out[\"{{INTEREST_TO}}\"] = to_dmy(d_interest_to) if d_interest_to else \"___\"\n\n\n    # # {{TOTAL_SUM}} = principal + interest + penalty\n    # if all(math.isfinite(x) for x in (loan_principal_n, interest_sum_n, penalty_sum_n)):\n    #     total_sum_n = loan_principal_n + interest_sum_n + penalty_sum_n\n    #     out[\"{{TOTAL_SUM}}\"] = format_byn(total_sum_n)\n    # else:\n    #     out[\"{{TOTAL_SUM}}\"] = \"___\"\n\n\n    # {{PENALTY_FROM}} = следующий день после окончания займа\n    if loandate_end:\n        out[\"{{PENALTY_FROM}}\"] = date_add_days_dmy(loandate_end, 1)\n    else:\n        out[\"{{PENALTY_FROM}}\"] = \"___\"\n\n\n    # {{PENALTY_TO}} = дата подачи иска\n    d_claim = parse_date_dmy(claim_date)\n    out[\"{{PENALTY_TO}}\"] = to_dmy(d_claim) if d_claim else \"___\"\n\n    # d_interest_to = parse_date_dmy(loandate_end)\n    # out[\"{{INTEREST_TO}}\"] = to_dmy(d_interest_to) if d_interest_to else \"___\"\n\n    # # {{TOTAL_SUM}} = principal + interest + penalty\n    # if all(math.isfinite(x) for x in (loan_principal_n, interest_sum_n, penalty_sum_n)):\n    #     total_sum_n = loan_principal_n + interest_sum_n + penalty_sum_n\n    #     out[\"{{TOTAL_SUM}}\"] = format_byn(total_sum_n)\n    # else:\n    #     out[\"{{TOTAL_SUM}}\"] = \"___\"\n\n    # # {{PENALTY_FROM}} = день после LOANDATE_END\n    # if loandate_end:\n    #     out[\"{{PENALTY_FROM}}\"] = date_add_days_dmy(loandate_end, 1)\n    # else:\n    #     out[\"{{PENALTY_FROM}}\"] = \"___\"\n\n    # # {{PENALTY_TO}} = CLAIM_DATE в ДД.ММ.ГГГГ\n    # d_claim = parse_date_dmy(claim_date)\n    # out[\"{{PENALTY_TO}}\"] = to_dmy(d_claim) if d_claim else \"___\"\n\n    # {{JUDGE_INITIALS}}\n    out[\"{{JUDGE_INITIALS}}\"] = initials(judge_full)\n\n    new_items.append({\"json\": out})\n\n# результат ноды\nreturn new_items\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        1536
+      ],
+      "id": "73af9ecd-ed1c-4857-a26e-86f97f2938d8",
+      "name": "formulas and input2"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import re\n\ndef fix_address_labels(text: str) -> str:\n    \"\"\"\n    Делает:\n    Место Регистрации: -> место регистрации:\n    Место Жительства: -> место жительства:\n    Агрогородок -> агрогородок (всегда с маленькой буквы)\n    Деревня -> деревня (всегда с маленькой буквы)\n    \"\"\"\n    if text is None:\n        return text\n\n    s = str(text)\n\n    # простые замены\n    s = s.replace(\"Место Регистрации:\", \"место регистрации:\")\n    s = s.replace(\"Место Жительства:\", \"место жительства:\")\n\n\n    # поселок городского типа — всегда в нижнем регистре\n    # поддерживает любые варианты регистра + лишние пробелы\n    s = re.sub(r\"\\bпос[её]лок\\s+городского\\s+типа\\b\", \"поселок городского типа\", s, flags=re.IGNORECASE)\n\n    # \"Аг.\" (сокращение агрогородок) — всегда в нижнем регистре: \"аг.\"\n    # поддерживает: Аг., АГ., аг. + пробелы после точки\n    s = re.sub(r\"\\bаг\\.\\s*\", \"аг. \", s, flags=re.IGNORECASE)\n\n\n    # агрогородок всегда с маленькой буквы\n    s = re.sub(r\"\\bАгрогородок\\b\", \"агрогородок\", s)\n    s = re.sub(r\"\\bагрогородок\\b\", \"агрогородок\", s)\n\n    # деревня всегда с маленькой буквы\n    s = re.sub(r\"\\bДеревня\\b\", \"деревня\", s)\n    s = re.sub(r\"\\bдеревня\\b\", \"деревня\", s)\n\n    # бульвар — всегда с маленькой буквы\n    s = re.sub(r\"\\bбульвар\\b\", \"бульвар\", s, flags=re.IGNORECASE)\n\n    # корп. всегда с маленькой буквы\n    s = re.sub(r\"\\bКорп.\\b\", \"корп.\", s)\n    s = re.sub(r\"\\bкорп.\\b\", \"корп.\", s)\n\n    return s\n\n\n# ----- Основная логика Python-ноды -----\n\nfor item in items:\n    data = item.get(\"json\", {})\n\n    # проходим по всем полям json\n    for key, value in list(data.items()):\n        if isinstance(value, str) and (\n            \"Место Регистрации\" in value or \n            \"Место Жительства\" in value or \n            \"агрогородок\" in value.lower() or\n            \"деревня\" in value.lower() or\n            \"поселок городского типа\" in value.lower() or\n            \"посёлок городского типа\" in value.lower() or\n            \"аг.\" in value.lower() or\n            \"бульвар\" in value.lower()   # <-- добавил\n        ):\n            data[key] = fix_address_labels(value)\n\nreturn items\n\n\n# import re\n\n# def fix_address_labels(text: str) -> str:\n#     \"\"\"\n#     Делает:\n#     Место Регистрации: -> место регистрации:\n#     Место Жительства: -> место жительства:\n#     Агрогородок -> агрогородок (всегда с маленькой буквы)\n#     \"\"\"\n#     if text is None:\n#         return text\n\n#     s = str(text)\n\n#     # простые замены\n#     s = s.replace(\"Место Регистрации:\", \"место регистрации:\")\n#     s = s.replace(\"Место Жительства:\", \"место жительства:\")\n\n#     # агрогородок всегда с маленькой буквы\n#     s = re.sub(r\"\\bАгрогородок\\b\", \"агрогородок\", s)\n#     s = re.sub(r\"\\bагрогородок\\b\", \"агрогородок\", s)\n\n#     return s\n\n\n# # ----- Основная логика Python-ноды -----\n\n# for item in items:\n#     data = item.get(\"json\", {})\n\n#     # проходим по всем полям json\n#     for key, value in list(data.items()):\n#         if isinstance(value, str) and (\n#             \"Место Регистрации\" in value or \n#             \"Место Жительства\" in value or \n#             \"агрогородок\" in value.lower()\n#         ):\n#             data[key] = fix_address_labels(value)\n\n# return items\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        1904
+      ],
+      "id": "a85fbb12-b59c-4e67-8bef-c4f5b42c71fa",
+      "name": "Code in Python (Beta)3"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# import re\n\n# text = items[0][\"json\"].get(\"combined\", \"\")\n\n# # 🔧 Базовая нормализация\n# text = text.replace(\"\\r\", \"\\n\")              # убираем \\r\n# text = re.sub(r\"[ \\t]+\", \" \", text)          # заменяем множественные пробелы на один\n\n# # Убираем переносы внутри строк, но сохраняем разделы\n# # Логика: если строка не начинается с номера раздела или заголовка, склеиваем её с предыдущей\n# lines = text.split(\"\\n\")\n# normalized_lines = []\n# buffer = \"\"\n\n# for line in lines:\n#     clean_line = line.strip()\n#     if not clean_line:\n#         continue\n#     # Новый раздел: начинается с цифры + точка или с заглавных букв\n#     if re.match(r\"^\\d+\\.\", clean_line) or re.match(r\"^[А-ЯЁ]{2,}\", clean_line):\n#         if buffer:\n#             normalized_lines.append(buffer.strip())\n#             buffer = \"\"\n#         normalized_lines.append(clean_line)\n#     else:\n#         # Склеиваем строки, если предыдущая заканчивается на \"бел.\" или \"руб.\" и текущая начинается с \"руб.\" или \"бел.\"\n#         if buffer and (buffer.endswith(\"бел.\") and clean_line.startswith(\"руб.\") or\n#                        buffer.endswith(\"руб.\") and clean_line.startswith(\"бел.\")):\n#             buffer += \" \" + clean_line\n#         else:\n#             if buffer:\n#                 normalized_lines.append(buffer.strip())\n#                 buffer = \"\"\n#             buffer = clean_line\n\n# if buffer:\n#     normalized_lines.append(buffer.strip())\n\n# # Собираем обратно текст\n# text = \"\\n\".join(normalized_lines)\n\n# # 🔧 Приводим к нижнему регистру для унификации поиска\n# normalized = text.lower()\n\n# # 🔧 Универсальные регулярки\n# loan_amount_match = re.search(r\"сумма займа[\\s\\S]*?([\\d.,]+)\", normalized)\n# period_end_match = re.search(r\"по[\\s\\S]*?(\\d{2}\\.\\d{2}\\.\\d{4})\", normalized)\n\n# loan_amount = loan_amount_match.group(1) if loan_amount_match else None\n# period_end = period_end_match.group(1) if period_end_match else None\n\n# return [{\n#     \"json\": {\n#         \"combined\": text,\n#         \"normalized\": normalized,\n#         \"LOAN_AMOUNT\": loan_amount,\n#         \"PERIOD_END\": period_end\n#     }\n# }]\n\nimport re\n\ntext = items[0][\"json\"].get(\"combined\", \"\")\n\n# 🔧 Базовая нормализация\ntext = text.replace(\"\\r\", \"\\n\")              # убираем \\r\ntext = re.sub(r\"[ \\t]+\", \" \", text)          # заменяем множественные пробелы на один\n\n# Убираем переносы внутри строк, но сохраняем разделы\n# Логика: если строка не начинается с номера раздела или заголовка, склеиваем её с предыдущей\nlines = text.split(\"\\n\")\nnormalized_lines = []\nbuffer = \"\"\n\nfor line in lines:\n    clean_line = line.strip()\n    if not clean_line:\n        continue\n    # Новый раздел: начинается с цифры + точка или с заглавных букв\n    if re.match(r\"^\\d+\\.\", clean_line) or re.match(r\"^[А-ЯЁ]{2,}\", clean_line):\n        if buffer:\n            normalized_lines.append(buffer.strip())\n            buffer = \"\"\n        normalized_lines.append(clean_line)\n    else:\n        buffer += \" \" + clean_line\n\nif buffer:\n    normalized_lines.append(buffer.strip())\n\n# Собираем обратно текст\ntext = \"\\n\".join(normalized_lines)\n\n# 🔧 Приводим к нижнему регистру для унификации поиска\nnormalized = text.lower()\n\n# 🔧 Универсальные регулярки\nloan_amount_match = re.search(r\"сумма займа[\\s\\S]*?([\\d.,]+)\", normalized)\nperiod_end_match = re.search(r\"по[\\s\\S]*?(\\d{2}\\.\\d{2}\\.\\d{4})\", normalized)\n\nloan_amount = loan_amount_match.group(1) if loan_amount_match else None\nperiod_end = period_end_match.group(1) if period_end_match else None\n\nreturn [{\n    \"json\": {\n        \"combined\": text,\n        \"normalized\": normalized,\n        \"LOAN_AMOUNT\": loan_amount,\n        \"PERIOD_END\": period_end\n    }\n}]\n\n\n\n# # import re\n\n# # text = items[0][\"json\"].get(\"combined\", \"\")\n\n# # # 🔧 Базовая нормализация\n# # text = text.replace(\"\\r\", \"\\n\")              # убираем \\r\n# # text = re.sub(r\"[ \\t]+\", \" \", text)          # заменяем множественные пробелы на один\n# # text = re.sub(r\"\\n{2,}\", \"\\n\", text)         # убираем лишние пустые строки\n# # text = text.strip()\n\n# # # 🔧 Приводим к нижнему регистру для унификации поиска\n# # normalized = text.lower()\n\n# # # 🔧 Универсальные регулярки\n# # loan_amount_match = re.search(r\"сумма займа[\\s\\S]*?([\\d.,]+)\", normalized)\n# # period_end_match = re.search(r\"по[\\s\\S]*?(\\d{2}\\.\\d{2}\\.\\d{4})\", normalized)\n\n# # loan_amount = loan_amount_match.group(1) if loan_amount_match else None\n# # period_end = period_end_match.group(1) if period_end_match else None\n\n# # return [{\n# #     \"json\": {\n# #         \"combined\": text,\n# #         \"normalized\": normalized,\n# #         \"LOAN_AMOUNT\": loan_amount,\n# #         \"PERIOD_END\": period_end\n# #     }\n# # }]\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2176,
+        1728
+      ],
+      "id": "1525e491-7c99-410a-b9fd-b6f727d4ecea",
+      "name": "Code in Python (Beta)4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 3) Merge original input + proxy response and map final text\n// We read original input from previous node using $node\nconst orig = $node[\"Prepare messages1\"].json._orig ?? {};\n\n// HTTP Request response is current $json\nconst proxyResponse = { ...$json };\n\n// Try to extract assistant text from common OpenAI-like shapes\nlet text = \"\";\nif (proxyResponse?.choices?.[0]?.message?.content) {\n  text = String(proxyResponse.choices[0].message.content);\n} else if (typeof proxyResponse.body === \"string\") {\n  text = proxyResponse.body;\n} else if (proxyResponse.body?.choices?.[0]?.message?.content) {\n  text = String(proxyResponse.body.choices[0].message.content);\n} else if (typeof proxyResponse.text === \"string\") {\n  text = proxyResponse.text;\n} else if (typeof proxyResponse.data === \"string\") {\n  text = proxyResponse.data;\n} else if (proxyResponse.data?.choices?.[0]?.message?.content) {\n  text = String(proxyResponse.data.choices[0].message.content);\n}\n\nreturn [\n  {\n    json: {\n      ...orig,\n      proxy_response: proxyResponse,\n      text\n    }\n  }\n];\n"
+      },
+      "id": "4a7bbfe3-ac6c-459f-be08-2e728c396046",
+      "name": "Merge input + response (map text)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1456,
+        1728
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build OpenAI Chat payload (model/messages) from incoming item\n\nconst combined = $json.combined ?? \"\";\nconst formula_block = $json.formula_block ?? \"\";\nconst templates_list = $json.templates_list ?? \"\";\n\nconst messages = [\n  {\n    role: \"system\",\n    content:\n`You are a strict placeholder extractor.\n\nYour task: from the SOURCE_TEXT, extract and format ONLY values for placeholders that match the official placeholder list below (TEMPLATES_LIST).\n\nReturn strictly formatted output:\nEach non-empty line must have this form:\n{{PLACEHOLDER}}: VALUE\n\nRules:\n- PLACEHOLDER names must match exactly those listed in TEMPLATES_LIST (case-sensitive). Copy names verbatim — do not change their case.\n- Do not invent or rename keys.\n- Skip any values that cannot be confidently extracted.\n- For formula placeholders (starting with \"=\"), copy them EXACTLY from FORMULA_BLOCK, do not compute them.\n- Do not add explanations, headers, or comments.\n- No JSON, no markdown, no code blocks — plain UTF-8 text only.\n\nStrict validation regex for each line:\n^\\\\s*\\\\{\\\\{[A-Za-z0-9_]+\\\\}\\\\}:\\\\s*.+$`\n  },\n  {\n    role: \"system\",\n    content:\n`Плейсхолдер - это слово в сдвоенных фигурных скобках. Ищи только указанный плейсхолдер. Если заданно:\n\"PLAINTIFF_FULL\",\n\"PLAINTIFF_EMAIL\",\n\"DEFENDANT_FULL\",\n\"DEFENDANT_INN\",\n\"DEFENDANT_PASSPORT\",\n\"DEFENDANT_EMAIL\",\n\"LOAN_NO\",\n\"LOAN_DATE\",\n\"LOANDATE_START\",\n\"LOANDATE_END\",\n\"LOAN_TERM_DAYS\",\n\"LOAN_PRINCIPAL\",\n\"INTEREST_SUM\",\n\"PENALTY_SUM\",\n\"TOTAL_SUM\",\n\"RATE\",\n\"PENALTY_RATE\",\n\"CLAIM_DATE\",\n\"PRETENSION_DATE\",\n\"PAYMENT_TYPE\",\n\"PAYMENT_SCHEDULE\",\n\n\"PLAINTIFF_ADDRESS\",\n\"DEFENDANT_ADDRESS\",\n\"PERIOD_END\",\n\"CERTIFICATE_DATE\",\n\"INTEREST_FROM\",\n\"INTEREST_TO\",\n\"PENALTY_FROM\",\n\"PENALTY_TO\",\n\"PAYMENT_DATE\",\n\"PAYMENT_SUM\",\n\"PRINCIPAL\",\n\"INTEREST\",\n\"LOAN_AMOUNT\",\n\n\"CITY\",\n\"CASE_NO\",\n\"ORDER_DATE\",\n\n\"JUDGE_FULL\",\n\"VENUE_ADDRESS\",\n\"HEARING_DATE\",\n\"HEARING_TIME\",\n\"DOCS_DUE_DATE\",\n\"COURT_EMAIL\",\n\"DECISION_DATE\",\n\"ARBITRATION_FEE\",\n\"JUDGE_POSITION\",\n\"CERTIFICATE_NUMBER\",\n\"SCREENSHOTS_DATE\",\n\nто и название плейсхолдера должно соответствовать:\n\nТы — механизм извлечения данных.\nЗапрещено:\n– додумывать\n– интерпретировать\n– переформулировать\n\nЕсли значение не найдено в тексте — верни пустую строку.\nИспользуй только данные из входного текста.\n\n{{PLAINTIFF_FULL}}\nЧто это: ФИО истца (заимодавца) Где искать:\nВ \"Договор займа\" — в начале документа, в разделе, где указаны стороны договора («Заимодавец: …»)\nВ \"Исковом заявлении\" — в шапке, до описания требований («Истец: …»)\nВ \"Претензии\" — в первой строке, где указано, кто обращается\n\n{{PLAINTIFF_EMAIL}}\nЧто это: Электронная почта истца Где искать:\nВ \"Договор займа\" — в разделе контактов заимодавца\nВ \"Исковом заявлении\" — в шапке рядом с ФИО или адресом истца\nВ \"Претензии\" — в блоке с контактами отправителя\n\n{{DEFENDANT_FULL}}\nЧто это: ФИО ответчика (заёмщика) Где искать:\nВ \"Договор займа\" — в разделе сторон («Заёмщик: …»)\nВ \"Исковом заявлении\" — после слов «Ответчик: …»\nВ \"Претензии\" — в обращении или в адресной части («Кому: …»)\n\n{{DEFENDANT_INN}}\nЧто это: Идентификационный номер заёмщика (ИНН, ID) Где искать:\nТолько в \"Договор займа\" — рядом с паспортными данными заёмщика, обычно после ФИО\n\n{{DEFENDANT_PASSPORT}}\nЧто это: Паспортные данные заёмщика (серия, номер, дата и место выдачи) Где искать:\nВ \"Договор займа\" — в разделе, где указаны данные заёмщика, рядом с ИНН\n\n{{DEFENDANT_EMAIL}}\nЧто это: Электронная почта заёмщика Где искать:\nВ \"Договор займа\" — в разделе контактов заёмщика\nВ \"Претензии\" — в адресной части («Кому: …»)\n\n{{LOAN_NO}}\nЧто это: Номер договора займа Где искать:\nТолько в \"Договор займа\" — в заголовке («Договор займа №… от …»)\n\n{{LOAN_DATE}}\nЧто это: Дата заключения договора Где искать:\nВ \"Договор займа\" — в заголовке рядом с номером\n\n{{LOANDATE_START}}\nЧто это: Дата начала пользования займом (выдачи средств) Где искать:\nВ \"Свидетельстве СОЗ\" — в первой строке таблицы или текста\nЕсли нет — в \"Договор займа\" в разделе условий предоставления займа\n\n{{LOANDATE_END}}\nЧто это: Дата окончания срока займа (погашения) Где искать:\nВ \"Договор займа\" - В блоке «Сведения о займе и его условиях», Дата погашения займа\nВ \"Свидетельстве СОЗ\" — в таблице или фразе «Дата окончания пользования»\n\n{{LOAN_PRINCIPAL}}\nЧто это: подлежащий уплате основной долг.\nГде искать: \"дата подачи искового заявления\", глава \"исковое заявление\", число после \"По состоянию на дату направления настоящего искового заявления размер основного долга Заемщика перед Заимодавцем по Договору (сумма невозвращенного займа) составляет\". Возьми только число, без \"бел.руб.\" или \" бел. руб.\".\n\n{{INTEREST_SUM}}\nЧто это: Сумма начисленных процентов\nГде искать: дата подачи искового заявления, число после \"По состоянию на дату направления настоящего искового заявления размер подлежащих\nуплате процентов за пользование займом составляет\". Возьми только число, без \"бел.руб.\" или \" бел. руб.\".\n\n{{INTEREST_FROM}}\nЧто это: период начисления процентов. Где искать: дата подачи искового заявления, Приложение к Исковому заявлению, таблица, Период начисления процентов, дата после с.\n\n{{INTEREST_TO}}\nЧто это: период начисления процентов. Где искать: дата подачи искового заявления, Приложение к Исковому заявлению, таблица, Период начисления процентов, дата после по.\n\n{{PENALTY_SUM}}\nЧто это: Сумма пени или неустойки Где искать: дата подачи искового заявления, глава ПРОШУ, число после \"неустойки (пени)\". Возьми только число, без \"бел.руб.\" или \" бел. руб.\".\n\n{{PENALTY_FROM}}\nЧто это: начало периода начисления пеней.\nЗадача: найти дату.\nГде искать: в нормализованном тексте найди текст содержащий \"Период\nначисления\nподлежащих\nуплате пеней\" и слова \"с\" и \"по\".\nВерни только число (ДД.ММ.ГГГГ) после \"с\".\nФормат ответа: дата.\nНичего не выдумывай.\n\n{{PENALTY_TO}}\nЧто это: дата окончания периода начисления пеней.\nЗадача: найти дату.\nГде искать: в нормализованном тексте найди текст содержащий \"Период\nначисления\nподлежащих\nуплате пеней\" и слова \"с\" и \"по\".\nВерни только число (ДД.ММ.ГГГГ) после \"по\".\nФормат ответа: дата.\nНичего не выдумывай.\n\n{{TOTAL_SUM}}\nЧто это: Размер заявленной суммы взыскания Где искать: найди текст \"Возбудить третейское разбирательство и взыскать с Ответчика\", верни число после слова \"сумму\". Возьми только число, без \"бел.руб.\" или \" бел. руб.\".\n\n{{RATE}}\nЧто это: Процентная ставка по договору Где искать:\nВ \"Договор займа\" — в разделе условий предоставления займа, обычно «Процентная ставка: …». Возьми только число, без \"бел.руб.\" или \" бел. руб.\".\n\n{{PENALTY_RATE}}\nЧто это: Ставка пени (процент за просрочку) Где искать:\nВ \"Договор займа\" — в разделе ответственности сторон. Возьми только число, без \"бел.руб.\" или \" бел. руб.\".\n\n{{CLAIM_DATE}}\nЧто это: Дата искового заявления Где искать:\nВ \"Исковом заявлении\" — в начале или в подписи («Дата: …»)\n\n{{PRETENSION_DATE}}\nЧто это: Дата претензии Где искать: claim\nЧисло после текста: \"Дата направления: \".\n\n{{PAYMENT_TYPE}}\nЧто это: Способ погашения займа Где искать:\nВ \"Договор займа\" — в разделе условий погашения\nВ \"Свидетельстве СОЗ\" — если указано явно\n\n{{PAYMENT_SCHEDULE}}\nЧто это: Краткий график платежей (одной строкой) Где искать:\nВ \"Договор займа\" — в таблице платежей или приложении\n\n{{PLAINTIFF_ADDRESS}}\nЧто это: Адрес места жительства и места регистрации истца\nГде искать:\nЕсли есть строка, начинающаяся с \"Зарегистрирован\" и строка \"Проживает\", записать адреса после этих строк.\nВывести в виде: место регистрации: {text}, место жительства: {text}\n\n{{DEFENDANT_ADDRESS}}\nЧто это: Адрес места жительства и места регистрации ответчика\nГде искать:\nЕсли есть строка, начинающаяся с \"Зарегистрирован\" и строка \"Проживает\", записать адреса после этих строк.\nВывести в виде: место регистрации: {text}, место жительства: {text}\n\n{{CITY}}\nЧто это: город. Где искать: \"vvod_dannyh.txt\", после \"Город:\".\n\n{{CASE_NO}}\nЧто это: Номер дела. Где искать: \"vvod_dannyh.txt\", после \"Номер дела:\".\n\n{{ORDER_DATE}}\nЧто это: Дата вынесения определения о возбуждении разбирательства. Где искать: \"vvod_dannyh.txt\", после \"Дата вынесения определения:\".\n\n{{JUDGE_FULL}}\nЧто это: ФИО судьи. Где искать: \"vvod_dannyh.txt\", после \"ФИО судьи:\".\n\n{{VENUE_ADDRESS}}\nЧто это: Адрес третейского суда (место проведения заседания). Где искать: \"vvod_dannyh.txt\", после \"Адрес третейского суда:\".\n\n{{HEARING_DATE}}\nЧто это: Дата заседания. Где искать: \"vvod_dannyh.txt\", после \"Дата заседания:\".\n\n{{HEARING_TIME}}\nЧто это: Время заседания. Где искать: \"vvod_dannyh.txt\", после \"Время заседания:\".\n\n{{DOCS_DUE_DATE}}\nЧто это: Крайний срок подачи документов в суд. Где искать: \"vvod_dannyh.txt\", после \"Крайний срок подачи документов:\".\n\n{{COURT_EMAIL}}\nЧто это: Электронная почта суда. Где искать: \"vvod_dannyh.txt\", после \"Электронная почта суда:\".\n\n{{DECISION_DATE}}\nЧто это: Дата вынесения решения. Где искать: \"vvod_dannyh.txt\", после \"Дата вынесения решения:\".\n\n{{ARBITRATION_FEE}}\nЧто это: Сумма арбитражного (третейского) сбора\". Где искать: \"vvod_dannyh.txt\", после \"Сумма арбитражного сбора:\".\n\n{{JUDGE_POSITION}}\nЧто это: Должность судьи. Где искать: \"vvod_dannyh.txt\", после \"Должность судьи:\".\n\n{{CERTIFICATE_NUMBER}}\nЧто это: Номер свидетельства СОЗ. Где искать: \"vvod_dannyh.txt\", после \"Номер свидетельства СОЗ:\".\n\n{{CERTIFICATE_DATE}}\nЧто это: Дата свидетельства СОЗ. Где искать: \"vvod_dannyh.txt\", после \"Дата свидетельства СОЗ:\".\n\n{{SCREENSHOTS_DATE}}\nЧто это: Дата направления скриншотов. Где искать: \"vvod_dannyh.txt\", после \"Дата направления скриншотов:\".\n\n{{LOAN_AMOUNT}}\nЧто это: сумма займа.\nЗадача: найти число.\nГде искать: в нормализованном тексте найди строку содержащую\n\"Заимодавец перечислил на банковский счет Заемщика процентный займ:\", далее найди строку содержащую \"сумма займа, бел.\". Верни следующее за ней число.\nВерни только число, без \"бел.руб.\" или \" бел. руб.\".\nФормат ответа: число.\n\n{{PAYMENT_DATE}}\nЧто это: дата платежа. Где искать: найди раздел \"Исковое заявление\", найди строку: \"В соответствии с п. 3.10 Договора, Стороны согласовали порядок исполнения\nобязательств согласно Графику платежей:\", найди строку \"Дата платежа\", верни 2-ое число которое находится под текстом.\nФормат ответа: число\nНичего не выдумывай.\n\n{{PAYMENT_SUM}}\nЧто это: сумма платежа. Где искать: найди раздел \"Исковое заявление\", найди строку: \"В соответствии с п. 3.10 Договора, Стороны согласовали порядок исполнения\nобязательств согласно Графику платежей:\", найди строку \"Сумма платежа\", верни 3-ее число которое находится под текстом. Возьми только число, без \"бел.руб.\" или \" бел. руб.\".\nФормат ответа: число\nНичего не выдумывай.\n\n{{PRINCIPAL}}\nЧто это: Основной долг. Где искать: найди раздел \"Исковое заявление\", найди строку, которая заканчивается:\n\"В соответствии с п. 3.10 Договора, Стороны согласовали порядок исполнения обязательств согласно Графику платежей:\", найди строку \"в т.ч. основной долг\", верни    4-ое число которое находится под текстом. Возьми только число, без \"бел.руб.\" или \" бел. руб.\".\nФормат ответа: число\nНичего не выдумывай.\n\n{{INTEREST}}\nЧто это: проценты. Где искать: найди раздел \"Исковое заявление\", найди строку, которая заканчивается:\n\"В соответствии с п. 3.10 Договора, Стороны согласовали порядок исполнения обязательств согласно Графику платежей:\", найди строку \"в т.ч. проценты\", верни 5-ое число которое находится под текстом. Возьми только число, без \"бел.руб.\" или \" бел. руб.\".\nФормат ответа: число\nНичего не выдумывай.\n\n{{LOAN_TERM_DAYS}}\nЧто это: Срок займа в днях Где искать:\nНайди строку, которая заканчивается \"... Заимодавец перечислил на банковский счет Заемщика процентный займ:\", далее найди \"Срок займа (дней)\", возьми только число под строкой. Ничего не выдумывай.`\n  },\n  {\n    role: \"user\",\n    content:\n`SOURCE_TEXT:\n\n${combined}\n\nFORMULA_BLOCK:\n\n${formula_block}\n\nTEMPLATES_LIST:\n\n${templates_list}`\n  },\n  {\n    role: \"user\",\n    content:\n`Example:\n{{PLAINTIFF_FULL}}: Иванов Иван Иванович\n{{DEFENDANT_FULL}}: Петров Пётр Петрович\n{{TOT_SUM}}: 368.50 BYN\n{{JUDGE_INITIALS}}:=initials({{JUDGE_FULL}})`\n  }\n];\n\nreturn [\n  {\n    json: {\n      model: \"gpt-4.1-mini\",\n      messages,\n      temperature: 0,\n      max_tokens: 8192\n    }\n  }\n];\n"
+      },
+      "id": "fa4b1523-7197-4261-9111-923887c178fe",
+      "name": "Prepare messages1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1792,
+        1728
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://magictext.online/wp-json/openai-proxy/v1/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "dd9308a4-70ad-4360-9d49-a57df05c4e59",
+      "name": "Proxy Placeholder Extract2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -1632,
+        1728
+      ]
+    }
+  ],
+  "connections": {
+    "Template and Formula": {
+      "main": [
+        [
+          {
+            "node": "Prepare messages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)1": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "placeholders from documents1": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "formulas and input2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in Python (Beta)3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook In (6)": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)2": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formulas and input2": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)3": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)4": {
+      "main": [
+        [
+          {
+            "node": "Template and Formula",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge input + response (map text)": {
+      "main": [
+        [
+          {
+            "node": "placeholders from documents1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare messages1": {
+      "main": [
+        [
+          {
+            "node": "Proxy Placeholder Extract2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proxy Placeholder Extract2": {
+      "main": [
+        [
+          {
+            "node": "Merge input + response (map text)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "506908a122789e7e332360ce7b2a076a6ada7c2674833c804ed6eb147750a323"
+  }
+}

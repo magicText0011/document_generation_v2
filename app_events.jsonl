@@ -1,0 +1,88 @@
+{"ts": "2026-06-12T12:59:41", "level": "INFO", "event": "startup", "message": "Лог очищен после внедрения"}
+{"ts": "2026-06-12T13:01:16", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:01:16", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:01:16", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:01:16", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:01:56", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:01:56", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "request", "message": "POST /generate-docs"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "generate_docs", "message": "Документы сформированы: documents.zip"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "response", "message": "POST /generate-docs -> 302"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "request", "message": "GET /download-docs"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "download_docs", "message": "Отдан архив: documents.zip"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "cleanup", "message": "Рабочие папки очищены после скачивания"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "response", "message": "GET /download-docs -> 200"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:02:00", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:04:55", "level": "INFO", "event": "request", "message": "POST /generate-txt"}
+{"ts": "2026-06-12T13:04:55", "level": "INFO", "event": "save_txt", "message": "Сохранён файл ввода данных: out_txt/vvod_dannyh.txt"}
+{"ts": "2026-06-12T13:04:55", "level": "INFO", "event": "response", "message": "POST /generate-txt -> 302"}
+{"ts": "2026-06-12T13:04:55", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:04:55", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:05:03", "level": "INFO", "event": "request", "message": "POST /convert-and-send"}
+{"ts": "2026-06-12T13:05:03", "level": "INFO", "event": "convert_start", "message": "Конвертация документов, файлов: 4", "files": 4}
+{"ts": "2026-06-12T13:05:03", "level": "INFO", "event": "convert_done", "message": "Конвертация завершена, файлов: 4", "files": 4}
+{"ts": "2026-06-12T13:05:03", "level": "INFO", "event": "response", "message": "POST /convert-and-send -> 302"}
+{"ts": "2026-06-12T13:05:03", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:05:03", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:05:13", "level": "INFO", "event": "request", "message": "POST /pack-zip"}
+{"ts": "2026-06-12T13:05:13", "level": "INFO", "event": "response", "message": "POST /pack-zip -> 200"}
+{"ts": "2026-06-12T13:05:13", "level": "INFO", "event": "request", "message": "POST /run-n8n"}
+{"ts": "2026-06-12T13:05:13", "level": "INFO", "event": "pipeline_start", "message": "Запуск конвейера извлечения плейсхолдеров"}
+{"ts": "2026-06-12T13:05:13", "level": "INFO", "event": "pipeline_done", "message": "Извлечено плейсхолдеров: 42", "placeholders": 42}
+{"ts": "2026-06-12T13:05:13", "level": "INFO", "event": "response", "message": "POST /run-n8n -> 200"}
+{"ts": "2026-06-12T13:05:13", "level": "INFO", "event": "request", "message": "POST /morph-fio"}
+{"ts": "2026-06-12T13:05:13", "level": "INFO", "event": "morph_fio", "message": "Склонения ФИО добавлены"}
+{"ts": "2026-06-12T13:05:13", "level": "INFO", "event": "response", "message": "POST /morph-fio -> 200"}
+{"ts": "2026-06-12T13:05:24", "level": "INFO", "event": "request", "message": "POST /update-placeholders"}
+{"ts": "2026-06-12T13:05:24", "level": "INFO", "event": "response", "message": "POST /update-placeholders -> 200"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "request", "message": "POST /generate-docs"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "generate_docs", "message": "Документы сформированы: documents.zip"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "response", "message": "POST /generate-docs -> 302"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "request", "message": "GET /download-docs"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "download_docs", "message": "Отдан архив: documents.zip"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "cleanup", "message": "Рабочие папки очищены после скачивания"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "response", "message": "GET /download-docs -> 200"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:05:26", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:05:49", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:05:49", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:06:22", "level": "INFO", "event": "request", "message": "POST /generate-txt"}
+{"ts": "2026-06-12T13:06:22", "level": "INFO", "event": "save_txt", "message": "Сохранён файл ввода данных: out_txt/vvod_dannyh.txt"}
+{"ts": "2026-06-12T13:06:22", "level": "INFO", "event": "response", "message": "POST /generate-txt -> 302"}
+{"ts": "2026-06-12T13:06:22", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:06:22", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:06:53", "level": "INFO", "event": "request", "message": "POST /convert-and-send"}
+{"ts": "2026-06-12T13:06:53", "level": "INFO", "event": "convert_start", "message": "Конвертация документов, файлов: 4", "files": 4}
+{"ts": "2026-06-12T13:06:53", "level": "INFO", "event": "convert_done", "message": "Конвертация завершена, файлов: 4", "files": 4}
+{"ts": "2026-06-12T13:06:53", "level": "INFO", "event": "response", "message": "POST /convert-and-send -> 302"}
+{"ts": "2026-06-12T13:06:53", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:06:53", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:07:13", "level": "INFO", "event": "request", "message": "POST /pack-zip"}
+{"ts": "2026-06-12T13:07:13", "level": "INFO", "event": "response", "message": "POST /pack-zip -> 200"}
+{"ts": "2026-06-12T13:07:13", "level": "INFO", "event": "request", "message": "POST /run-n8n"}
+{"ts": "2026-06-12T13:07:13", "level": "INFO", "event": "pipeline_start", "message": "Запуск конвейера извлечения плейсхолдеров"}
+{"ts": "2026-06-12T13:07:13", "level": "INFO", "event": "pipeline_done", "message": "Извлечено плейсхолдеров: 42", "placeholders": 42}
+{"ts": "2026-06-12T13:07:13", "level": "INFO", "event": "response", "message": "POST /run-n8n -> 200"}
+{"ts": "2026-06-12T13:07:13", "level": "INFO", "event": "request", "message": "POST /morph-fio"}
+{"ts": "2026-06-12T13:07:13", "level": "INFO", "event": "morph_fio", "message": "Склонения ФИО добавлены"}
+{"ts": "2026-06-12T13:07:13", "level": "INFO", "event": "response", "message": "POST /morph-fio -> 200"}
+{"ts": "2026-06-12T13:10:49", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:10:49", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:10:51", "level": "INFO", "event": "request", "message": "POST /generate-docs"}
+{"ts": "2026-06-12T13:10:51", "level": "INFO", "event": "generate_docs", "message": "Документы сформированы: documents.zip"}
+{"ts": "2026-06-12T13:10:51", "level": "INFO", "event": "response", "message": "POST /generate-docs -> 302"}
+{"ts": "2026-06-12T13:10:51", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:10:51", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:10:51", "level": "INFO", "event": "request", "message": "GET /download-docs"}
+{"ts": "2026-06-12T13:10:51", "level": "INFO", "event": "download_docs", "message": "Отдан архив: documents.zip"}
+{"ts": "2026-06-12T13:10:51", "level": "INFO", "event": "cleanup", "message": "Рабочие папки очищены после скачивания"}
+{"ts": "2026-06-12T13:10:51", "level": "INFO", "event": "response", "message": "GET /download-docs -> 200"}
+{"ts": "2026-06-12T13:10:52", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:10:52", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:10:53", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:10:53", "level": "INFO", "event": "response", "message": "GET / -> 200"}

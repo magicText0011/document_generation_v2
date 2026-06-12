@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>Логи</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+         margin: 24px; color: #222; background: #f6f7f9; }
+  h1 { margin: 0 0 14px; font-size: 22px; }
+  .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:14px; }
+  .btn { display:inline-block; padding:6px 12px; border:1px solid #d0d0d6;
+         background:#fff; border-radius:6px; cursor:pointer; font-size:13px;
+         color:#222; text-decoration:none; }
+  .btn:hover { background:#f0f0f3; }
+  .btn.danger { color:#b00; border-color:#e0b0b0; }
+  .count { margin-left:auto; color:#666; font-size:13px; }
+
+  .empty { padding:40px; text-align:center; color:#777; background:#fff;
+           border:1px dashed #ddd; border-radius:8px; }
+
+  /* карточка лога */
+  .run { background:#fff; border:1px solid #e3e3e7; border-left:4px solid #1f9d55;
+         border-radius:8px; margin-bottom:8px; overflow:hidden;
+         transition: box-shadow .15s; }
+  .run.fail { border-left-color:#d33; background:#fff7f7; }
+  .run.fail .head { color:#b00020; }
+  .run:hover { box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+
+  .head { display:grid; grid-template-columns: 70px 70px 1fr auto auto;
+          align-items:center; gap:14px; padding:10px 14px; cursor:pointer;
+          user-select:none; font-size:14px; }
+  .head .num { color:#888; font-variant-numeric: tabular-nums; }
+  .head .name { font-weight:600; }
+  .head .ts { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+              font-size:13px; color:#555; }
+  .head .total { color:#555; font-size:12px; font-variant-numeric: tabular-nums; }
+  .head .chev { color:#aaa; font-size:13px; transition: transform .15s; }
+  .run.open .head .chev { transform: rotate(90deg); }
+
+  .body { display:none; padding: 0 14px 14px; border-top:1px solid #eee;
+          background:#fcfcfd; }
+  .run.open .body { display:block; }
+  .summary { font-size:12px; color:#555; margin: 10px 0 6px; }
+  .summary span { margin-right:14px; }
+
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid #eee; vertical-align: top; }
+  th { background:#fafafa; font-weight:600; }
+  td.name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.status .pill { padding:1px 6px; font-size:11px; }
+
+  .pill { display:inline-block; padding:2px 8px; border-radius:10px;
+          font-size:12px; font-weight:600; }
+  .pill.ok   { background:#e6f6ea; color:#117a35; }
+  .pill.fail { background:#fdecec; color:#b00020; }
+  .bar { display:inline-block; height:6px; background:#cfe3ff; border-radius:3px;
+         vertical-align: middle; margin-left:6px; }
+  .err { color:#b00020; font-size: 12px; margin-top:4px; }
+  pre.trace { background:#1e1e22; color:#eaeaea; padding:12px;
+              border-radius:6px; overflow:auto; font-size:12px;
+              white-space:pre; margin-top:10px; max-height: 420px; }
+</style>
+</head>
+<body>
+  <h1>Логи</h1>
+  <div class="toolbar">
+    <a class="btn" href="/">← На главную</a>
+    <button class="btn" id="refresh">Обновить</button>
+    <span class="count" id="count"></span>
+  </div>
+  <div id="runs"></div>
+
+<script>
+const fmtSec = (s) => (s == null ? "—" : (Number(s).toFixed(2) + " с"));
+const esc = (s) => String(s == null ? "" : s)
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+
+function renderRun(r, idx) {
+  const failClass = r.ok ? "" : " fail";
+  const num = r.num_today != null ? `#${r.num_today}` : `#${idx + 1}`;
+
+  const maxStep = Math.max(0.001, ...(r.steps || []).map(s => s.elapsed || 0));
+  const stepsRows = (r.steps || []).map(s => {
+    const w = Math.round(((s.elapsed || 0) / maxStep) * 120);
+    const sp = s.ok
+        ? '<span class="pill ok">OK</span>'
+        : '<span class="pill fail">FAIL</span>';
+    const err = s.error ? `<div class="err">${esc(s.error)}</div>` : "";
+    const info = s.info ? `<div style="color:#666;font-size:12px;">${esc(s.info)}</div>` : "";
+    return `<tr>
+      <td class="status">${sp}</td>
+      <td class="name">${esc(s.name)}${info}${err}</td>
+      <td class="time">${fmtSec(s.elapsed)}<span class="bar" style="width:${w}px"></span></td>
+    </tr>`;
+  }).join("");
+
+  const trace = r.error_trace
+      ? `<pre class="trace">${esc(r.error_trace)}</pre>`
+      : (r.error ? `<div class="err">${esc(r.error)}</div>` : "");
+
+  const usage = r.usage || {};
+  const inTok = usage.prompt_tokens ?? usage.input_tokens ?? 0;
+  const outTok = usage.completion_tokens ?? usage.output_tokens ?? 0;
+  const cost = (r.cost_usd != null) ? `$${Number(r.cost_usd).toFixed(4)}` : "—";
+
+  return `
+  <div class="run${failClass}" data-idx="${idx}">
+    <div class="head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="name">run</span>
+      <span class="num">${num}</span>
+      <span class="ts">${esc(r.started_at || "")}</span>
+      <span class="total">${fmtSec(r.total_elapsed)}</span>
+      <span class="chev">▸</span>
+    </div>
+    <div class="body">
+      <div class="summary">
+        <span>Шагов: <b>${(r.steps || []).length}</b></span>
+        <span>Всего: <b>${fmtSec(r.total_elapsed)}</b></span>
+        <span>AI: <b>${fmtSec(r.ai_elapsed)}</b></span>
+        <span>Tokens in/out: <b>${inTok}/${outTok}</b></span>
+        <span>Стоимость: <b>${cost}</b></span>
+      </div>
+      <table>
+        <thead><tr><th style="width:60px;">Статус</th><th>Шаг</th><th style="width:200px;">Время</th></tr></thead>
+        <tbody>${stepsRows || '<tr><td colspan="3" style="color:#999;">нет шагов</td></tr>'}</tbody>
+      </table>
+      ${trace}
+    </div>
+  </div>`;
+}
+
+async function load() {
+  const root = document.getElementById("runs");
+  root.innerHTML = '<div class="empty">Загрузка…</div>';
+  try {
+    const resp = await fetch("/api/logs", { cache: "no-store" });
+    const data = await resp.json();
+    if (!data.ok) {
+      root.innerHTML = `<div class="empty">Ошибка: ${esc(data.error || "")}</div>`;
+      return;
+    }
+    const runs = data.runs || [];
+    document.getElementById("count").textContent = `Запусков: ${runs.length}`;
+    if (!runs.length) {
+      root.innerHTML = '<div class="empty">Запусков ещё нет. Нажмите «Запустить конвейер» на главной.</div>';
+      return;
+    }
+    root.innerHTML = runs.map((r, i) => renderRun(r, i)).join("");
+  } catch (e) {
+    root.innerHTML = `<div class="empty">Ошибка загрузки: ${esc(e.message)}</div>`;
+  }
+}
+
+document.getElementById("refresh").addEventListener("click", load);
+
+load();
+</script>
+</body>
+</html>

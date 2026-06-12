@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE
+.idea/
+
+# Рабочие/генерируемые папки приложения
+out_txt/
+out_docs/
+documents_converted/
+
+# Бэкапы атомарной записи плейсхолдеров
+*.bak
+
+# Журнал запросов (runtime-лог конвейера)
+runs.jsonl
