@@ -28,11 +28,10 @@ from documents import generate_documents, OUTPUT_DIR, ZIP_NAME
 
 import json
 from morph_fio import process_and_update   # импортируем твою функцию
-from flask import after_this_request, got_request_exception
+from flask import after_this_request
 import shutil
 
 from config import get_delay_seconds
-from app_log import log_event, log_exception, read_events, clear_events
 
 # создаём экземпляр приложения
 
@@ -49,44 +48,6 @@ register_placeholders_routes(app, OUT_JSON)
 
 
 app.secret_key = "my-secret-key-123456789"
-
-
-# ===== Сквозное логирование событий и ошибок =====
-# Шумные/частые служебные запросы в лог не пишем (поллинг, статика, сами страницы логов).
-_LOG_SKIP_PATHS = {"/get-placeholders", "/api/logs", "/logs", "/logs/clear", "/runs", "/favicon.ico"}
-
-
-def _skip_log(path: str) -> bool:
-    return path in _LOG_SKIP_PATHS or path.startswith("/static")
-
-
-@app.before_request
-def _log_request_start():
-    if not _skip_log(request.path):
-        log_event("request", message=f"{request.method} {request.path}")
-
-
-@app.after_request
-def _log_request_end(response):
-    if not _skip_log(request.path):
-        level = "WARNING" if response.status_code >= 400 else "INFO"
-        log_event("response", level=level,
-                  message=f"{request.method} {request.path} -> {response.status_code}")
-    return response
-
-
-def _log_unhandled(sender, exception, **extra):
-    # Логируем любое необработанное исключение, не меняя поведение Flask (в debug
-    # остаётся интерактивный трейсбэк).
-    try:
-        log_exception("unhandled_error", exception, path=request.path, method=request.method)
-    except Exception:
-        log_exception("unhandled_error", exception)
-
-
-got_request_exception.connect(_log_unhandled, app)
-
-log_event("startup", message="Приложение запущено")
 
 # простой маршрут для проверки
 # @app.route('/')
@@ -105,7 +66,7 @@ def index():
     app_url = os.getenv("APP_URL", "http://localhost:56782")
     text = text.replace("http://localhost:56782", app_url)
 
-    # задержка обработки документов (из config.json) -> в JS как миллисекунды
+    # задержка обработки документов (из .env) -> в JS как миллисекунды
     delay_ms = int(get_delay_seconds() * 1000)
     text = text.replace("__PROCESSING_DELAY_MS__", str(delay_ms))
 
@@ -117,7 +78,7 @@ def index():
 def generate_txt():
     form_data = request.form.to_dict()
     filepath = save_txt(form_data)
-    log_event("save_txt", message=f"Сохранён файл ввода данных: {filepath}")
+    print(f"Файл сохранён: {filepath}")
     return redirect(url_for('index'))  # или вернуть сообщение об успехе
 
 # @app.route('/convert-and-send', methods=['POST'])
@@ -157,17 +118,12 @@ def convert_and_send():
 
     # если ничего не пришло — просто назад на главную
     if not files:
-        log_event("convert", level="WARNING", message="Не получено ни одного файла")
+        print("convert-and-send: не получено ни одного файла")
         return redirect(url_for('index'))
 
     # здесь вся магия: конвертация и отправка, как было в старой версии
-    log_event("convert_start", message=f"Конвертация документов, файлов: {len(files)}", files=len(files))
-    try:
-        result = save_and_forward(files)
-    except Exception as e:
-        log_exception("convert_failed", e, files=len(files))
-        raise
-    log_event("convert_done", message=f"Конвертация завершена, файлов: {len(files)}", files=len(files))
+    result = save_and_forward(files)
+    print("convert-and-send result:", result)
 
     # возвращаемся на главную страницу, как раньше
     return redirect(url_for('index'))
@@ -193,110 +149,15 @@ def pack_zip():
 
 
 @app.route("/run-n8n", methods=["POST"])
-
 def run_n8n():
     # Извлечение плейсхолдеров теперь выполняется локально на Python (без n8n).
     from pipeline import run_pipeline
-    log_event("pipeline_start", message="Запуск конвейера извлечения плейсхолдеров")
-    try:
-        result = run_pipeline()
-    except Exception as e:
-        log_exception("pipeline_failed", e)
-        raise
-    log_event("pipeline_done", message=f"Извлечено плейсхолдеров: {len(result)}", placeholders=len(result))
+    result = run_pipeline()
     return jsonify(result)
 
 
-EVENTS_PAGE_TEMPLATE = """<!doctype html>
-<html lang="ru"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Логи событий приложения</title>
-<style>
- body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:24px;background:#f6f7f9;color:#1c1e21}
- h1{font-size:20px;margin:0 0 4px}
- .sub{color:#65676b;font-size:13px;margin:0 0 16px}
- .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
- .btn{display:inline-block;padding:6px 12px;border:1px solid #d0d0d6;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;color:#222;text-decoration:none}
- .btn:hover{background:#f0f0f3}
- .btn.danger{color:#b00;border-color:#e0b0b0}
- .count{margin-left:auto;color:#666;font-size:13px}
- table{border-collapse:collapse;width:100%;background:#fff;border:1px solid #dcdfe3;border-radius:8px;overflow:hidden;font-size:13px}
- th,td{border-bottom:1px solid #eef0f2;padding:7px 10px;text-align:left;vertical-align:top}
- th{background:#f0f2f5;font-weight:600;position:sticky;top:0}
- td.ts{font-family:ui-monospace,monospace;color:#555;white-space:nowrap}
- td.ev{font-family:ui-monospace,monospace;color:#1c1e21;white-space:nowrap}
- tr.ERROR{background:#fff7f7}
- tr.WARNING{background:#fffdf3}
- .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600}
- .pill.INFO{background:#e8f0fe;color:#1a56c4}
- .pill.WARNING{background:#fef3c7;color:#92600a}
- .pill.ERROR{background:#fdecec;color:#b00020}
- .err{color:#b00020;white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:12px;margin-top:6px}
- details summary{cursor:pointer;color:#1a73e8}
- .empty{color:#65676b;font-size:15px;padding:30px 0}
-</style></head><body>
-<h1>Логи событий</h1>
-<p class="sub">Все события работы приложения и ошибки (новые сверху). Детализация по шагам конвейера — на <a href="/runs">/runs</a>.</p>
-<div class="toolbar">
- <a class="btn" href="/logs">↻ Обновить</a>
- <form method="post" action="/logs/clear" style="display:inline" onsubmit="return confirm('Очистить весь лог?')">
-   <button class="btn danger" type="submit">Очистить лог</button>
- </form>
- <span class="count">событий: {{ events|length }}</span>
-</div>
-{% if not events %}<p class="empty">Событий пока нет.</p>{% else %}
-<table>
- <tr><th>Время</th><th>Уровень</th><th>Событие</th><th>Сообщение</th></tr>
- {% for e in events %}
- <tr class="{{ e.level }}">
-  <td class="ts">{{ e.ts }}</td>
-  <td><span class="pill {{ e.level }}">{{ e.level }}</span></td>
-  <td class="ev">{{ e.event }}</td>
-  <td>{{ e.message }}{% if e.error %}<details><summary>трейсбэк</summary><div class="err">{{ e.error }}</div></details>{% endif %}</td>
- </tr>
- {% endfor %}
-</table>
-{% endif %}
-</body></html>"""
-
-
-@app.route("/logs", methods=["GET"])
-def logs_page():
-    """Страница со сквозными логами событий приложения (новые сверху)."""
-    return render_template_string(EVENTS_PAGE_TEMPLATE, events=read_events(500))
-
-
-@app.route("/logs/clear", methods=["POST"])
-def logs_clear():
-    clear_events()
-    log_event("logs_cleared", message="Лог событий очищен вручную")
-    return redirect(url_for("logs_page"))
-
-
-@app.route("/api/logs", methods=["GET"])
-def api_logs():
-    """Отдаёт последние запуски конвейера из runs.jsonl (новые сверху)."""
-    from pipeline import RUNS_LOG
-    if not RUNS_LOG.exists():
-        return jsonify({"ok": True, "runs": []})
-    runs = []
-    try:
-        for line in RUNS_LOG.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                runs.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    except OSError as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-    runs.reverse()
-    return jsonify({"ok": True, "runs": runs})
-
-
-# Отдельная человекочитаемая страница логов запусков (тот же runs.jsonl, что и
-# /api/logs; сосуществует с /logs). Self-contained: server-side рендер, без JS/шаблонов.
+# Человекочитаемая страница логов запусков из runs.jsonl. Self-contained:
+# server-side рендер, без JS/шаблонов.
 RUNS_PAGE_TEMPLATE = """<!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
 <title>Логи запусков — runs.json</title>
@@ -325,9 +186,6 @@ RUNS_PAGE_TEMPLATE = """<!doctype html>
    <span>{{ r.started_at }}</span>
    <span class="muted">№ за день: {{ r.num_today }}</span>
    <span class="muted">всего: {{ r.total_elapsed }} c</span>
-   <span class="muted">LLM: {{ r.ai_elapsed }} c</span>
-   <span class="muted">токены: in {{ r.usage.get('prompt_tokens', r.usage.get('input_tokens', '—')) }} / out {{ r.usage.get('completion_tokens', r.usage.get('output_tokens', '—')) }}</span>
-   <span class="muted">${{ '%.6f'|format(r.cost_usd or 0) }}</span>
   </div>
   {% if r.error %}<div class="err">{{ r.error }}</div>{% endif %}
   {% if r.steps %}
@@ -345,9 +203,9 @@ RUNS_PAGE_TEMPLATE = """<!doctype html>
 </body></html>"""
 
 
-@app.route("/runs", methods=["GET"])
-def runs_page():
-    """Человекочитаемая страница логов запусков из runs.jsonl (новые сверху)."""
+@app.route("/logs", methods=["GET"])
+def logs_page():
+    """Страница логов запусков конвейера из runs.jsonl (новые сверху)."""
     from pipeline import RUNS_LOG
     runs = []
     if RUNS_LOG.exists():
@@ -366,9 +224,6 @@ def runs_page():
     return render_template_string(RUNS_PAGE_TEMPLATE, runs=runs)
 
 
-
-
-
 @app.route("/morph-fio", methods=["POST"])
 def morph_fio_endpoint():
     # путь к JSON в папке out_txt
@@ -379,12 +234,7 @@ def morph_fio_endpoint():
         json_data = json.load(f)
 
     # обрабатываем и дополняем склонениями
-    try:
-        updated = process_and_update(json_data)
-    except Exception as e:
-        log_exception("morph_fio_failed", e)
-        raise
-    log_event("morph_fio", message="Склонения ФИО добавлены")
+    updated = process_and_update(json_data)
 
     # возвращаем обновлённый JSON
     return jsonify(updated)
@@ -409,10 +259,8 @@ def generate_docs():
     """
     try:
         zip_path = generate_documents()
-        log_event("generate_docs", message=f"Документы сформированы: {zip_path.name}")
         flash(f"Документы сформированы: {zip_path.name}")
     except Exception as e:
-        log_exception("generate_docs_failed", e)
         flash(f"Ошибка при генерации документов: {e}")
     # если твой основной роут называется не index, поставь его имя
     return redirect(url_for("index"))
@@ -479,12 +327,11 @@ def download_docs():
         def cleanup(response):
             try:
                 clear_work_dirs()
-                log_event("cleanup", message="Рабочие папки очищены после скачивания")
+                print("✅ Все рабочие папки очищены")
             except Exception as e:
-                log_exception("cleanup_failed", e)
+                print("❌ Ошибка очистки:", e)
             return response
 
-        log_event("download_docs", message=f"Отдан архив: {zip_path.name}")
         return send_file(
             zip_path,
             as_attachment=True,
@@ -493,7 +340,6 @@ def download_docs():
         )
 
     except Exception as e:
-        log_exception("download_docs_failed", e)
         flash(f"Ошибка при скачивании: {e}")
         return redirect(url_for("index"))
 
@@ -502,9 +348,3 @@ def download_docs():
 if __name__ == '__main__':
     # debug=True — для разработки, автоматически перезапускает сервер при изменениях
     app.run(host='0.0.0.0', port=8000, debug=True)
-
-
-#
-#
-#
-#
