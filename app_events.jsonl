@@ -86,3 +86,17 @@
 {"ts": "2026-06-12T13:10:52", "level": "INFO", "event": "response", "message": "GET / -> 200"}
 {"ts": "2026-06-12T13:10:53", "level": "INFO", "event": "request", "message": "GET /"}
 {"ts": "2026-06-12T13:10:53", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:53:11", "level": "INFO", "event": "startup", "message": "Приложение запущено"}
+{"ts": "2026-06-12T13:53:11", "level": "INFO", "event": "startup", "message": "Приложение запущено"}
+{"ts": "2026-06-12T13:53:16", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:53:16", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:53:16", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:53:16", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:53:40", "level": "INFO", "event": "startup", "message": "Приложение запущено"}
+{"ts": "2026-06-12T13:53:41", "level": "INFO", "event": "startup", "message": "Приложение запущено"}
+{"ts": "2026-06-12T13:53:44", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:53:44", "level": "INFO", "event": "response", "message": "GET / -> 200"}
+{"ts": "2026-06-12T13:53:45", "level": "INFO", "event": "startup", "message": "Приложение запущено"}
+{"ts": "2026-06-12T13:53:45", "level": "INFO", "event": "startup", "message": "Приложение запущено"}
+{"ts": "2026-06-12T13:53:49", "level": "INFO", "event": "request", "message": "GET /"}
+{"ts": "2026-06-12T13:53:49", "level": "INFO", "event": "response", "message": "GET / -> 200"}
