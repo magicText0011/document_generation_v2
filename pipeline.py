@@ -122,7 +122,7 @@ def _flatten(s: str) -> str:
 # 3. Нормализаторы ФИО/адресов/паспорта
 # ============================================================
 
-ABBRS = {"BYN", "ООО", "ОАО", "ЗАО", "ИП", "УНП", "UNP", "ID", "РУВД", "РОВД", "ОВД", "МР"}
+ABBRS = {"BYN", "ООО", "ОАО", "ЗАО", "ИП", "УНП", "UNP", "ID", "РУВД", "РОВД", "ОВД", "МР", "РБ"}
 
 NAME_KEYS = {"PLAINTIFF_FULL", "DEFENDANT_FULL"}
 ADDRESS_KEYS = {"PLAINTIFF_ADDRESS", "DEFENDANT_ADDRESS"}
@@ -182,9 +182,20 @@ def normalize_address(s: str) -> str:
         m = marker_re.match(tok)
         if m:
             tokens.append(m.group(1).lower() + m.group(2))
-        elif tok in ABBRS or (re.match(r"^[A-ZА-ЯЁ]{2,4}$", tok) and not re.search(r"\d", tok)):
-            tokens.append(tok.upper())
-        elif re.match(r"^\d", tok):
+            continue
+        # Короткие аббревиатуры (РБ, ООО, РУВД и т.п.) могут идти с хвостовой
+        # пунктуацией ("РБ," / "РБ." / "РБ:") — проверяем ядро без неё и возвращаем её.
+        core_match = re.fullmatch(r"([^,;:.—)\]]+)([,;:.—)\]]*)", tok)
+        if core_match:
+            core, trail = core_match.groups()
+            # «РБ» — аббревиатура «Республика Беларусь»: всегда заглавными, даже если
+            # пришла в нижнем регистре или с хвостовой пунктуацией ("рб," -> "РБ,").
+            if core.lower() == "рб" or\
+               core in ABBRS or\
+               (re.match(r"^[A-ZА-ЯЁ]{2,4}$", core) and not re.search(r"\d", core)):
+                tokens.append(core.upper() + trail)
+                continue
+        if re.match(r"^\d", tok):
             tokens.append(tok)
         else:
             tokens.append(smart_cap_word(tok))
@@ -341,9 +352,14 @@ def extract_documents(raw_text: str) -> dict:
         out["{{RATE}}"] = v
 
     # --- График платежей: первая строка таблицы (дата, сумма, осн.долг, проценты) ---
+    # Устойчиво к разной вёрстке заголовка таблицы: и когда шапка в одну строку
+    # ("Номер платежа Дата платежа Сумма платежа ... проценты"), и когда разбита на
+    # несколько строк (слова "платежа"/"долг" переносятся, попадают управляющие
+    # символы \x0c между страницами). Привязываемся к маркеру графика, но ищем саму
+    # строку данных независимо от порядка слов в заголовке (между ними — любой "мусор").
     m = re.search(
-        r"Граф\w*\s+платеж\w*\s*:?\s*Номер\s+платежа\s+Дата\s+платежа\s+Сумма\s+платежа.*?проценты\s+"
-        r"(\d+)\s*(" + _DATE + r")\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)",
+        r"(?:Первоначальный\s+график\s+платеж\w*\s*:?\s*|Граф\w*\s+платеж\w*\s*:?\s*)"
+        r"[^0-9]{0,200}?(\d+)\s*(" + _DATE + r")\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)",
         raw_text, re.IGNORECASE | re.DOTALL,
     )
     if m:
